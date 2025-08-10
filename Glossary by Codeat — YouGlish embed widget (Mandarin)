@@ -1,0 +1,86 @@
+/**
+ * Glossary by Codeat — YouGlish embed widget (Mandarin)
+ * Tự động nhúng widget YouGlish bằng phương pháp được hỗ trợ chính thức.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+function cy_is_glossary_post_type( $post = null ) {
+    $post = get_post( $post );
+    if ( ! $post ) {
+        return false;
+    }
+    return ( false !== strpos( $post->post_type, 'glossary' ) );
+}
+
+/**
+ * Tạo mã nhúng Widget YouGlish.
+ * Đây là phương pháp chính thức và sẽ không bị lỗi "từ chối kết nối".
+ */
+function cy_youglish_widget_markup( $term ) {
+    $term_esc = esc_attr( trim( $term ) );
+    $accent   = 'cn';
+    $lang     = 'Chinese';
+
+    // Tạo một ID duy nhất cho mỗi widget để tránh xung đột
+    $widget_id = 'yg-widget-' . uniqid();
+
+    $html = sprintf(
+        '<div class="cy-youglish-widget-container" style="margin-top:12px;">
+            <a id="%1$s" class="youglish-widget" data-query="%2$s" data-lang="%3$s" data-accent="%4$s" data-components="8415" data-bkg-color="theme_light" rel="nofollow" href="https://youglish.com">Visit YouGlish.com</a>
+        </div>
+        ',
+        esc_attr( $widget_id ),
+        $term_esc,
+        esc_attr( $lang ),
+        esc_attr( $accent )
+    );
+
+    return apply_filters( 'cy_youglish_widget_markup', $html, $term );
+}
+
+/**
+ * Thêm script của YouGlish vào footer của trang
+ * Script này chỉ được thêm một lần duy nhất, ngay cả khi có nhiều widget.
+ */
+function cy_add_youglish_widget_script() {
+    // Chỉ thêm script nếu đây là trang chi tiết của glossary
+    if ( is_singular() && function_exists('cy_is_glossary_post_type') && cy_is_glossary_post_type() ) {
+        wp_enqueue_script( 'youglish-widget', 'https://youglish.com/public/emb/widget.js', array(), null, true );
+    }
+}
+add_action( 'wp_enqueue_scripts', 'cy_add_youglish_widget_script' );
+
+
+function cy_append_youglish_widget_to_glossary_content( $content ) {
+    if ( ! is_singular() || ! cy_is_glossary_post_type() ) {
+        return $content;
+    }
+
+    if ( apply_filters( 'cy_youglish_disable_on_site', false ) ) {
+        return $content;
+    }
+
+    global $post;
+    
+    // Ưu tiên lấy URL tùy chỉnh nếu có, nhưng chỉ khi đó là link YouGlish
+    $custom_query = get_post_meta( $post->ID, 'youglish_query', true );
+
+    if ( ! empty( $custom_query ) ) {
+        $term_to_search = $custom_query;
+    } else {
+        $term_to_search = $post->post_title;
+    }
+
+    $widget_html = cy_youglish_widget_markup( $term_to_search );
+
+    $position = apply_filters( 'cy_youglish_position', 'append' );
+    if ( 'prepend' === $position ) {
+        return $widget_html . $content;
+    }
+    return $content . $widget_html;
+}
+// Đổi tên hàm hook để tránh nhầm lẫn với hàm cũ
+add_filter( 'the_content', 'cy_append_youglish_widget_to_glossary_content', 20 );
